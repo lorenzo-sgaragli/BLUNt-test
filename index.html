@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>BLUNT - Ultimate Board Edition</title>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+    <style>
+        :root {
+            --bg-color: #1a1512; 
+            --accent: #ff2a5f;
+            --accent-blue: #00ccff;
+            --text-light: #ffffff;
+            --wood-light: #844c2a; 
+            --wood-dark: #4e2912;
+            --gold: #ffd700;
+            --neon-confirm: #ff9900;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Roboto, sans-serif; user-select: none; }
+        body { background: radial-gradient(circle, #291f1a 0%, #120e0c 100%); color: var(--text-light); min-height: 100vh; display: flex; flex-direction: column; align-items: center; overflow-x: hidden; padding: 10px; }
+        
+        .screen { display: none; width: 100%; max-width: 450px; }
+        .screen.active { display: flex; flex-direction: column; gap: 15px; }
+
+        .auth-box { background: rgba(38, 30, 26, 0.9); padding: 25px; border-radius: 24px; border: 2px solid #5c3e2f; text-align: center; width: 100%; box-shadow: 0 15px 30px rgba(0,0,0,0.6); }
+        .input-group { display: flex; flex-direction: column; gap: 6px; text-align: left; margin-bottom: 15px; }
+        label { font-size: 0.85rem; color: #dfb299; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; }
+        input { background: rgba(0, 0, 0, 0.4); border: 2px solid #5c3e2f; padding: 14px; border-radius: 14px; color: white; font-size: 1.1rem; width: 100%; font-weight: 600; }
+        input:focus { border-color: var(--gold); outline: none; }
+        
+        button { cursor: pointer; border: none; padding: 16px; border-radius: 14px; font-size: 1.1rem; font-weight: 800; text-transform: uppercase; width: 100%; transition: transform 0.1s; }
+        button:active { transform: scale(0.98); }
+        .btn-main { background: linear-gradient(135deg, var(--accent) 0%, #ff5e62 100%); color: white; box-shadow: 0 6px 20px rgba(255, 42, 95, 0.4); }
+        .btn-secondary { background: transparent; color: #ffd700; border: 2px solid #ffd700; box-shadow: 0 4px 15px rgba(255, 215, 0, 0.1); }
+
+        #screen-game { max-width: 100vw; width: 100%; display: none; flex-direction: column; gap: 10px; align-items: center; }
+        #screen-game.active { display: flex; }
+
+        .tavolo-container { position: relative; width: 96vw; height: 96vw; max-width: 440px; max-height: 440px; margin: 20px 0; display: flex; align-items: center; justify-content: center; }
+        .tavolo-wood-bg { position: absolute; width: 76%; height: 76%; border-radius: 50%; background: radial-gradient(circle, var(--wood-light) 0%, var(--wood-dark) 75%, #2b1407 100%); border: 10px solid #6e3b1c; box-shadow: inset 0 0 35px rgba(0,0,0,0.9), 0 0 0 2px var(--gold), 0 12px 30px rgba(0,0,0,0.7); z-index: 2; }
+
+        .area-mazzi { position: absolute; left: 16%; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; gap: 12px; z-index: 4; }
+        .slot-mazzo { width: 48px; height: 68px; border-radius: 6px; border: 2px dashed rgba(255,255,255,0.15); background: rgba(0,0,0,0.4); position: relative; }
+        .mazzo-fisico { position: absolute; width: 100%; height: 100%; border-radius: 6px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 0.5rem; text-transform: uppercase; text-align: center; font-weight: 900; padding: 4px; letter-spacing: 0.5px; border: 1px solid rgba(255,255,255,0.2); box-shadow: 0 4px 8px rgba(0,0,0,0.5); }
+        .mazzo-domande { background: linear-gradient(135deg, #111 0%, #222 100%); color: #fff; }
+        .mazzo-risposte { background: linear-gradient(135deg, #fff 0%, #eee 100%); color: #111; border-color: #fff; }
+
+        .centro-contenuti { position: absolute; right: 16%; width: 48%; height: 70%; display: flex; flex-direction: column; justify-content: space-between; z-index: 3; padding: 5px 0; }
+        .visualizzatore-domanda { background: rgba(0, 0, 0, 0.9); padding: 8px 10px; border-radius: 12px; font-size: 0.72rem; font-weight: 700; line-height: 1.3; border: 2px solid #5c3e2f; text-align: center; min-height: 52px; max-height: 65px; overflow-y: auto; }
+        .banco-risposte-tavolo { display: flex; flex-wrap: wrap; gap: 5px; justify-content: center; background: rgba(0,0,0,0.5); padding: 6px; border-radius: 12px; height: 120px; border: 2px dashed #4e2912; align-content: center; overflow-y: auto; }
+        
+        .mini-carta-banco { width: 34px; height: 48px; background: linear-gradient(135deg, #a02040 0%, #601025 100%); border-radius: 5px; border: 1px solid var(--accent); box-shadow: 0 4px 6px rgba(0,0,0,0.4); position: relative; flex-shrink: 0; }
+        .posto-giocatore { position: absolute; width: 75px; height: 75px; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 5; }
+        .player-name-tag { font-size: 0.6rem; font-weight: 800; background: #2b1a11; color: #ffd700; width: 72px; height: 16px; display: flex; align-items: center; justify-content: center; border-radius: 4px; border: 1px solid #6e442c; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-transform: uppercase; }
+        .player-disegno { width: 32px; height: 32px; background: radial-gradient(circle, #3a2214 0%, #1f1109 100%); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; border: 2px solid #7c4c32; margin: 2px 0; }
+        
+        .posto-giocatore.is-zar .player-disegno { border-color: var(--accent); box-shadow: 0 0 10px var(--accent); }
+        .posto-giocatore.is-me .player-disegno { border-color: var(--accent-blue); box-shadow: 0 0 10px var(--accent-blue); }
+        .slot-punti-giocatore { width: 18px; height: 18px; background: rgba(0,0,0,0.6); border-radius: 3px; display: flex; align-items: center; justify-content: center; font-size: 0.55rem; font-weight: 900; color: var(--gold); }
+
+        .area-mano-privata { width: 100%; max-width: 450px; background: linear-gradient(to top, #161210 0%, #261e1a 100%); border-radius: 20px 20px 0 0; padding: 12px; border-top: 3px solid #5c3e2f; }
+        .scroll-mano { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 8px; align-items: flex-end; height: 165px; }
+
+        .carta-mano-reale { flex: 0 0 96px; height: 130px; background: linear-gradient(135deg, #ffffff 0%, #f1f1f1 100%); color: #111; border-radius: 10px; padding: 8px; font-size: 0.8rem; font-weight: 700; text-align: left; border: none; display: flex; flex-direction: column; justify-content: space-between; box-shadow: 0 4px 10px rgba(0,0,0,0.4); transition: transform 0.2s, border-color 0.2s; position: relative; }
+        .carta-mano-reale.selezionata { transform: translateY(-18px) scale(1.05); border: 3px solid var(--neon-confirm); box-shadow: 0 10px 20px rgba(255, 153, 0, 0.4); }
+        .badge-conferma { position: absolute; top: -26px; left: 50%; transform: translateX(-50%); background: linear-gradient(135deg, #ff9900 0%, #ff5500 100%); color: white; font-size: 0.6rem; font-weight: 900; padding: 5px 9px; border-radius: 6px; white-space: nowrap; box-shadow: 0 4px 10px rgba(0,0,0,0.4); border: 1px solid #fff; display: none; text-transform: uppercase; animation: pulsanteConfirm 0.6s infinite alternate; }
+        @keyframes pulsanteConfirm { from { transform: translateX(-50%) scale(0.95); } to { transform: translateX(-50%) scale(1.05); } }
+        .carta-mano-reale.selezionata .badge-conferma { display: block; }
+        .carta-mano-reale:disabled { background: #d8d8d8; color: #999; opacity: 0.6; }
+
+        #showroom-layer { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: radial-gradient(circle, #2c1a12 0%, #0d0a08 100%); z-index: 9999; display: none; flex-direction: column; padding: 16px; align-items: center; justify-content: space-between; }
+        #showroom-layer.active { display: flex; }
+        .showroom-domanda { background: #000; width: 100%; max-width: 400px; padding: 15px; border-radius: 16px; border: 2px solid #5c3e2f; font-size: 1.05rem; font-weight: 800; color: #fff; text-align: center; }
+        .showroom-area-centrale { position: relative; width: 100%; max-width: 400px; height: 52vh; display: flex; align-items: center; justify-content: center; }
+        .showroom-carta-corrente-focus { width: 220px; height: 300px; background: white; color: black; border-radius: 18px; padding: 20px; font-size: 1.3rem; font-weight: 800; display: flex; flex-direction: column; justify-content: space-between; box-shadow: 0 15px 35px rgba(0,0,0,0.7); border: 4px solid #fff; animation: appariCarta 0.3s ease-out; }
+        @keyframes appariCarta { from { transform: scale(0.7); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+        .showroom-timeline-miniature { width: 100%; max-width: 400px; display: flex; gap: 8px; overflow-x: auto; padding: 6px; background: rgba(0,0,0,0.4); border-radius: 12px; min-height: 75px; }
+        .mini-scheda-letta { flex: 0 0 46px; height: 62px; background: #eee; color: #222; border-radius: 6px; font-size: 0.45rem; font-weight: 800; padding: 4px; overflow: hidden; border: 2px solid transparent; text-align: center; }
+        .mini-scheda-letta.attiva { border-color: var(--accent-blue); transform: scale(1.05); }
+
+        #victory-screen { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.95); z-index: 100000; display: none; flex-direction: column; align-items: center; justify-content: center; padding: 20px; text-align: center; }
+        #victory-screen.active { display: flex; }
+    </style>
+</head>
+<body>
+
+    <div id="screen-auth" class="auth-box screen active">
+        <h1 style="font-size: 3rem; text-transform:uppercase; margin-bottom:15px; font-weight:900; background: linear-gradient(45deg, #ffd700, #ff5e62); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Blunt</h1>
+        <div class="input-group">
+            <label>Nickname (Max 8 caratteri)</label>
+            <input type="text" id="username" maxlength="8" placeholder="Nome...">
+        </div>
+        <button class="btn-main" onclick="creaStanza()">Crea Tavolo</button>
+        <div style="margin: 12px 0; color:#8a6d5c; font-weight:700;">OPPURE</div>
+        <div class="input-group">
+            <label>Codice Tavolo</label>
+            <input type="text" id="room-code" placeholder="Codice...">
+        </div>
+        <button class="btn-secondary" onclick="entraInStanza()">Siediti al Tavolo</button>
+    </div>
+
+    <div id="screen-lobby" class="auth-box screen">
+        <h2 id="lobby-title" style="color:var(--gold);">Tavolo d'Attesa</h2>
+        <div id="players-list-lobby" style="margin: 15px 0; text-align:left; font-size:1rem; background:rgba(0,0,0,0.3); padding:12px; border-radius:12px; border: 1px solid #5c3e2f;"></div>
+        <button id="start-game-btn" class="btn-main" onclick="avviaPartita()" style="display:none;">Apri il Tavolo 🪓</button>
+    </div>
+
+    <div id="screen-game">
+        <div class="tavolo-container">
+            <div class="tavolo-wood-bg"></div>
+            <div class="area-mazzi">
+                <div class="slot-mazzo" id="slot-domande-target">
+                    <div class="mazzo-fisico mazzo-domande" onclick="azioneMazzoNero()">Mazzo Domande</div>
+                </div>
+                <div class="slot-mazzo" id="slot-risposte-target">
+                    <div class="mazzo-fisico mazzo-risposte">Mazzo Risposte</div>
+                </div>
+            </div>
+            <div class="centro-contenuti">
+                <div class="visualizzatore-domanda" id="question-box">In attesa dello Zar...</div>
+                <div class="banco-risposte-tavolo" id="banco-carte"></div>
+                <div id="showroom-trigger-box" style="width:100%; height:38px;"></div>
+            </div>
+            <div id="posti-anello" style="position:absolute; width:100%; height:100%; top:0; left:0; pointer-events:none;"></div>
+        </div>
+        <div class="area-mano-privata">
+            <p id="istruzioni-turno" style="font-size:0.75rem; color:#ffd700; font-weight:800; text-transform:uppercase; margin-bottom:8px;"></p>
+            <div class="scroll-mano" id="my-hand"></div>
+        </div>
+    </div>
+
+    <div id="showroom-layer">
+        <div class="showroom-domanda" id="show-domanda-testo">DOMANDA CORRENTE?</div>
+        <div class="showroom-area-centrale" id="show-contenitore-dinamico"></div>
+        <div style="width:100%; text-align:center;" id="show-container-voto-definitivo"></div>
+        <div class="showroom-timeline-miniature" id="show-miniature-list"></div>
+    </div>
+
+    <div id="victory-screen">
+        <h2 style="color:#ffd700; font-size:2.5rem; text-transform:uppercase; margin-bottom:20px; text-shadow:0 0 15px #ffd700;">Vincitore Round! 🏆</h2>
+        <div id="vincitore-nome-banner" style="font-size:1.8rem; font-weight:900; color:#00ccff; margin-bottom:30px; text-transform:uppercase;">NOME GIOCATORE</div>
+        <div id="vincitore-carta-box" style="background:white; color:black; width:240px; height:320px; border-radius:18px; padding:25px; text-align:left; font-size:1.4rem; font-weight:800; display:flex; flex-direction:column; justify-content:between; box-shadow:0 0 40px rgba(255,255,255,0.4);">
+            <span id="vincitore-testo-carta">Testo della risposta vincente...</span>
+            <span style="font-size:0.7rem; color:#ff2a5f; font-weight:900; text-align:right;">BLUNT</span>
+        </div>
+    </div>
+
+    <script>
+        const LINGUE = {
+            it: {
+                attesaZar: "In attesa dello Zar...",
+                guidaZar: "Zar, tocca 'Mazzo Domande' per estrarre una frase.",
+                seiZar: "👑 Sei lo ZAR. Attendi le mosse degli altri.",
+                seiGiocatore: "🃏 Seleziona una risposta e premi il badge per confermare:",
+                tavoloTitolo: "Tavolo: ",
+                alTavolo: " è al tavolo",
+                conferma: "CONFERMA MOSSA 🎯",
+                vincitoreTitolo: "Vincitore Round! 🏆",
+                scopriCarte: "APRI SHOWROOM 🔍",
+                votaCarta: "PROCLAMA VINCITORE 👑",
+                domande: [
+                    "L'ultimo desiderio di un condannato a morte è stato: ..............",
+                    "Secondo l'università di Oxford, ....... e ....... sono strettamente collegati.",
+                    "Durante la cena di Natale, il nonno ha rovinato l'atmosfera tirando fuori ..............",
+                    "Nei laboratori segreti governativi hanno scoperto che la causa dell'omosessualità è ..............",
+                    "La nuova app di tendenza tra i giovani serve a monitorare ..............",
+                    "Per ristabilire l'ordine pubblico in centro, il sindaco ha proposto di usare ..............",
+                    "Cosa nasconde il Papa sotto la tunica durante le cerimonie ufficiali? ..............",
+                    "Nel mio testamento ho specificato che tutti i miei beni andranno a ..............",
+                    "La vera causa dietro l'estinzione dei dinosauri è stata ..............",
+                    "La cosa peggiore da lanciare dal palco durante un concerto benefico è ..............",
+                    "Cosa tiene in piedi l'economia dei paesi sottosviluppati? ....... e ......."
+                ],
+                risposte: [
+                    "Scoprire un tumore al cervello al quarto grado il giorno del compleanno",
+                    "Fare l'inchino con la barca come il Capitano",
+                    "Picchiare un gruppo di persone per ristabilire l'ordine",
+                    "Feti abortiti usati come palline da stress",
+                    "Gerry Scotti che ride davanti ai malati di cancro",
+                    "Un prete pedofilo colto da infarto durante la messa",
+                    "Sterilizzare i poveri a tradimento",
+                    "L'odore acre dei corpi cremati",
+                    "Mettere sotto un gruppo di ciclisti in autostrada",
+                    "Vendere organi sul dark web per pagarsi le vacanze",
+                    "Un attentato kamikaze fallito per il ritardo dei treni",
+                    "Lo sbarco dei clandestini usato come tiro al bersaglio",
+                    "La sedia a rotelle di un disabile lanciata dalle scale",
+                    "Una rissa tra mendicanti per un pezzo di pane ammuffito",
+                    "Donare sangue infetto solo per guardare il mondo bruciare",
+                    "Abbandonare la nonna all'autogrill sotto il sole di agosto",
+                    "Un cannone spara-ceneri umane al posto dei coriandoli"
+                ]
+            },
+            en: {
+                attesaZar: "Waiting for the Card Zar...",
+                guidaZar: "Zar, tap 'Question Deck' to draw a card.",
+                seiZar: "👑 You are the ZAR. Wait for other players.",
+                seiGiocatore: "🃏 Select a card and tap to confirm your move:",
+                tavoloTitolo: "Table: ",
+                alTavolo: " is at the table",
+                conferma: "CONFIRM MOVE 🎯",
+                vincitoreTitolo: "Round Winner! 🏆",
+                scopriCarte: "OPEN SHOWROOM 🔍",
+                votaCarta: "CHOOSE WINNER 👑",
+                domande: [
+                    "The last wish of a death row inmate was: ..............",
+                    "According to Oxford University, ....... and ....... are strictly linked.",
+                    "During Christmas dinner, grandpa ruined the mood by pulling out .............."
+                ],
+                risposte: [
+                    "Finding out bad news on your birthday",
+                    "Selling organs on the dark web to pay for holidays",
+                    "Leaving grandma at the gas station in August",
+                    "A priest having a heart attack during mass"
+                ]
+            }
+        };
+
+        const lang = navigator.language.startsWith("it") ? "it" : "en";
+        const mazzoLocale = LINGUE[lang];
+
+        const firebaseConfig = { databaseURL: "https://bluntgame-3b6bb-default-rtdb.europe-west1.firebasedatabase.app/" };
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+
+        let mioNome = ""; let codiceStanzaCorrente = ""; let mieCarteBianche = []; let idCartaSelezionataMano = null;
+        let indexShowroomCorrente = 0;
+        const iconeDisegni = ["🤡", "🥷", "🧙", "🧛", "🧟", "🤖", "👽", "🤠", "👮", "🧑‍🚀"];
+
+        function mostraSchermata(screenId) {
+            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+            const target = document.getElementById(screenId);
+            if(target) target.classList.add('active');
+        }
+
+        // FUNZIONE AUSILIARIA PER SHUFFLARE I MAZZI CENTRALMENTE
+        function mescolaArray(array) {
+            let copia = [...array];
+            for (let i = copia.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [copia[i], copia[j]] = [copia[j], copia[i]];
+            }
+            return copia;
+        }
+
+        function creaStanza() {
+            const inputNome = document.getElementById("username").value.trim();
+            if (!inputNome || inputNome.length > 8) return alert("Nickname non valido!");
+            mioNome = inputNome;
+            codiceStanzaCorrente = Math.random().toString(36).substring(2, 6).toUpperCase();
+
+            // Lo Zar crea la stanza e genera il mazzo unico centralizzato sul DB
+            const mazzoRisposteShufflato = mescolaArray(mazzoLocale.risposte);
+
+            database.ref("stanze/" + codiceStanzaCorrente).set({
+                stato: "attesa",
+                creatore: mioNome,
+                zar: mioNome,
+                domandaCorrente: "",
+                showroomAperto: false,
+                vincitoreFaseFinale: "",
+                mazzoCondiviso: mazzoRisposteShufflato
+            }).then(() => {
+                configuraPresenzaGiocatore(0);
+            });
+        }
+
+        function entraInStanza() {
+            const inputNome = document.getElementById("username").value.trim();
+            const inputCodice = document.getElementById("room-code").value.trim().toUpperCase();
+            if (!inputNome || !inputCodice) return alert("Dati mancanti!");
+            mioNome = inputNome; codiceStanzaCorrente = inputCodice;
+
+            database.ref("stanze/" + codiceStanzaCorrente).once("value", (snapshot) => {
+                if (!snapshot.exists()) return alert("Tavolo non trovato.");
+                if (snapshot.child("giocatori").hasChild(mioNome)) return alert("Nickname già presente!");
+                const occupati = snapshot.child("giocatori").numChildren();
+                if (occupati >= 10) return alert("Tavolo pieno!");
+
+                configuraPresenzaGiocatore(occupati);
+            });
+        }
+
+        function configuraPresenzaGiocatore(indiceSedia) {
+            const userRef = database.ref("stanze/" + codiceStanzaCorrente + "/giocatori/" + mioNome);
+            userRef.set({ punti: 0, sedia: indiceSedia }).then(() => {
+                userRef.onDisconnect().remove();
+                document.getElementById("lobby-title").innerText = mazzoLocale.tavoloTitolo + codiceStanzaCorrente;
+                if (indiceSedia === 0) document.getElementById("start-game-btn").style.display = "block";
+                mostraSchermata("screen-lobby"); 
+                ascoltaTavolo();
+            });
+        }
+
+        function avviaPartita() {
+            database.ref("stanze/" + codiceStanzaCorrente).update({ stato: "gioco" });
+        }
+
+        function ascoltaTavolo() {
+            database.ref("stanze/" + codiceStanzaCorrente + "/giocatori").on("value", (snapshot) => {
+                const lobbyList = document.getElementById("players-list-lobby");
+                if (lobbyList) {
+                    lobbyList.innerHTML = "";
+                    snapshot.forEach((p) => { lobbyList.innerHTML += `<div style="padding:6px; font-weight:600;">🪑 ${p.key}${mazzoLocale.alTavolo}</div>`; });
+                }
+            });
+
+            database.ref("stanze/" + codiceStanzaCorrente).on("value", (snapshot) => {
+                if (!snapshot.exists()) return;
+                const stanza = snapshot.val();
+                if (stanza.stato === "gioco") {
+                    document.getElementById("screen-lobby").classList.remove("active");
+                    document.getElementById("screen-auth").classList.remove("active");
+                    document.getElementById("screen-game").classList.add("active");
+                    
+                    // Gestione pesca centralizzata sicura
+                    controllaEPescaSeNecessario();
+                    
+                    if (stanza.showroomAperto) {
+                        costruisciShowroomEsecuzione(stanza);
+                    } else {
+                        document.getElementById("showroom-layer").classList.remove("active");
+                    }
+
+                    if (stanza.vincitoreFaseFinale) {
+                        eseguiScenografiaVittoriaInterattiva(stanza);
+                    } else {
+                        document.getElementById("victory-screen").classList.remove("active");
+                    }
+                    
+                    costruisciTavoloGeometrico(snapshot);
+                }
+            });
+        }
+
+        // RISOLUZIONE DEL BUG DEI DUPLICATI: Stacca le carte dal DB comune in modo atomico
+        function controllaEPescaSeNecessario() {
+            const carteMancanti = 10 - mieCarteBianche.length;
+            if (carteMancanti <= 0) return;
+
+            const mazzoRef = database.ref("stanze/" + codiceStanzaCorrente + "/mazzoCondiviso");
+            
+            mazzoRef.transaction((mazzoAttuale) => {
+                if (!mazzoAttuale) return [];
+                // Preleva le carte necessarie dalla cima del mazzo unico sul DB
+                let cartePescate = mazzoAttuale.splice(0, carteMancanti);
+                
+                // Mantiene traccia locale sul client delle carte pescate
+                mieCarteBianche = [...mieCarteBianche, ...cartePescate];
+                return mazzoAttuale;
+            });
+        }
+
+        function costruisciTavoloGeometrico(snapshot) {
+            const stanza = snapshot.val();
+            const anello = document.getElementById("posti-anello");
+            anello.innerHTML = "";
+            const giocatori = stanza.giocatori || {}; 
+            const elencoNomi = Object.keys(giocatori);
+            const amI_Zar = (stanza.zar === mioNome);
+
+            elencoNomi.forEach((nomeG, idx) => {
+                const datiG = giocatori[nomeG];
+                const angolo = (idx * (360 / elencoNomi.length)) * (Math.PI / 180); 
+                const raggioAvatar = 37; const raggioTesti = 52; 
+
+                const ax = 50 + raggioAvatar * Math.cos(angolo); const ay = 50 + raggioAvatar * Math.sin(angolo);
+                const tx = 50 + raggioTesti * Math.cos(angolo); const ty = 50 + raggioTesti * Math.sin(angolo);
+
+                const divPosto = document.createElement("div");
+                divPosto.className = "posto-giocatore";
+                divPosto.style.left = `${ax}%`; divPosto.style.top = `${ay}%`; divPosto.style.transform = `translate(-50%, -50%)`;
+                
+                if (stanza.zar === nomeG) divPosto.classList.add("is-zar");
+                if (nomeG === mioNome) divPosto.classList.add("is-me");
+                
+                divPosto.innerHTML = `
+                    <div class="player-disegno">${iconeDisegni[idx % iconeDisegni.length]}</div>
+                    <div style="position: absolute; left: ${((tx-ax)*4) + 50}%; top: ${((ty-ay)*4) + 50}%; transform: translate(-50%, -50%); display:flex; flex-direction:column; align-items:center; gap:2px; pointer-events:none;">
+                        <div class="player-name-tag">${nomeG}</div>
+                        <div class="slot-punti-giocatore">${datiG.punti}</div>
+                    </div>
+                `;
+                anello.appendChild(divPosto);
+            });
+
+            document.getElementById("question-box").innerText = stanza.domandaCorrente || mazzoLocale.guidaZar;
+            document.getElementById("istruzioni-turno").innerText = amI_Zar ? mazzoLocale.seiZar : mazzoLocale.seiGiocatore;
+            
+            disegnaManoBassa(stanza, amI_Zar);
+            disegnaBancoCentrale(stanza, amI_Zar, elencoNomi.length);
+        }
+
+        function azioneMazzoNero() {
+            database.ref("stanze/" + codiceStanzaCorrente).once("value", (snap) => {
+                const stanza = snap.val();
+                if (stanza.zar !== mioNome || stanza.domandaCorrente) return;
+                const qIdx = Math.floor(Math.random() * mazzoLocale.domande.length);
+                database.ref("stanze/" + codiceStanzaCorrente).update({ 
+                    domandaCorrente: mazzoLocale.domande[qIdx], 
+                    showroomAperto: false,
+                    vincitoreFaseFinale: "",
+                    carteGiocate: ""
+                });
+            });
+        }
+
+        function disegnaManoBassa(stanza, amI_Zar) {
+            const handDiv = document.getElementById("my-hand");
+            handDiv.innerHTML = "";
+            const giaGiocato = stanza.carteGiocate && stanza.carteGiocate[mioNome];
+
+            mieCarteBianche.forEach((testo, idx) => {
+                const card = document.createElement("button");
+                card.className = "carta-mano-reale";
+                if(idCartaSelezionataMano === idx) card.classList.add("selezionata");
+                
+                card.innerHTML = `
+                    <div class="badge-conferma">${mazzoLocale.conferma}</div>
+                    <span>${testo}</span>
+                    <span style="font-size:0.5rem; text-align:right; font-weight:900; color:#aaa;">BLUNT</span>
+                `;
+                
+                if (amI_Zar || giaGiocato || !stanza.domandaCorrente || stanza.vincitoreFaseFinale) card.disabled = true;
+
+                card.onclick = function(e) {
+                    e.stopPropagation();
+                    if (idCartaSelezionataMano === idx) {
+                        database.ref("stanze/" + codiceStanzaCorrente + "/carteGiocate/" + mioNome).set(testo)
+                        .then(() => {
+                            mieCarteBianche.splice(idx, 1);
+                            idCartaSelezionataMano = null;
+                        });
+                    } else {
+                        idCartaSelezionataMano = idx;
+                        disegnaManoBassa(stanza, amI_Zar);
+                    }
+                };
+                handDiv.appendChild(card);
+            });
+        }
+
+        function disegnaBancoCentrale(stanza, amI_Zar, totaleGiocatori) {
+            const banco = document.getElementById("banco-carte");
+            const triggerBox = document.getElementById("showroom-trigger-box");
+            banco.innerHTML = "";
+            triggerBox.innerHTML = "";
+
+            const carteGiocate = stanza.carteGiocate || {};
+            const numeroCarteGiocate = Object.keys(carteGiocate).length;
+            const targetRichiesto = totaleGiocatori - 1;
+
+            for (let i = 0; i < numeroCarteGiocate; i++) {
+                const minicarta = document.createElement("div");
+                minicarta.className = "mini-carta-banco";
+                banco.appendChild(minicarta);
+            }
+
+            if (amI_Zar && numeroCarteGiocate >= targetRichiesto && targetRichiesto > 0 && !stanza.showroomAperto) {
+                const btnShow = document.createElement("button");
+                btnShow.className = "btn-main";
+                btnShow.style.padding = "8px";
+                btnShow.style.fontSize = "0.8rem";
+                btnShow.innerText = mazzoLocale.scopriCarte;
+                btnShow.onclick = () => {
+                    database.ref("stanze/" + codiceStanzaCorrente).update({ showroomAperto: true });
+                };
+                triggerBox.appendChild(btnShow);
+            }
+        }
+
+        function costruisciShowroomEsecuzione(stanza) {
+            const layer = document.getElementById("showroom-layer");
+            layer.classList.add("active");
+
+            document.getElementById("show-domanda-testo").innerText = stanza.domandaCorrente;
+            const centroDinamico = document.getElementById("show-contenitore-dinamico");
+            const votoBox = document.getElementById("show-container-voto-definitivo");
+            const miniatureList = document.getElementById("show-miniature-list");
+
+            centroDinamico.innerHTML = "";
+            votoBox.innerHTML = "";
+            miniatureList.innerHTML = "";
+
+            const carteGiocate = stanza.carteGiocate || {};
+            const arrChiavi = Object.keys(carteGiocate);
+            
+            const proprietarioCorrente = arrChiavi[indexShowroomCorrente];
+            const testoCartaCorrente = carteGiocate[proprietarioCorrente];
+
+            if (testoCartaCorrente) {
+                const focusCard = document.createElement("div");
+                focusCard.className = "showroom-carta-corrente-focus";
+                focusCard.innerHTML = `<span>${testoCartaCorrente}</span><span style='font-size:0.7rem; color:var(--accent); font-weight:900; text-align:right;'>BLUNT</span>`;
+                centroDinamico.appendChild(focusCard);
+
+                if (stanza.zar === mioNome) {
+                    const btnVota = document.createElement("button");
+                    btnVota.className = "btn-main";
+                    btnVota.innerText = mazzoLocale.votaCarta;
+                    btnVota.onclick = () => {
+                        proclamaVincitoreRound(proprietarioCorrente, testoCartaCorrente);
+                    };
+                    votoBox.appendChild(btnVota);
+                }
+            }
+
+            arrChiavi.forEach((chiave, idx) => {
+                const minicard = document.createElement("div");
+                minicard.className = "mini-scheda-letta" + (idx === indexShowroomCorrente ? " attiva" : "");
+                minicard.innerText = `Carta ${idx + 1}`;
+                minicard.onclick = () => {
+                    indexShowroomCorrente = idx;
+                    costruisciShowroomEsecuzione(stanza);
+                };
+                miniatureList.appendChild(minicard);
+            });
+        }
+
+        function proclamaVincitoreRound(proprietario, testoCarta) {
+            database.ref("stanze/" + codiceStanzaCorrente + "/giocatori/" + proprietario + "/punti").transaction((puntiAttuali) => {
+                return (puntiAttuali || 0) + 1;
+            }).then(() => {
+                database.ref("stanze/" + codiceStanzaCorrente).update({
+                    vincitoreFaseFinale: JSON.stringify({ nome: proprietario, carta: testoCarta }),
+                    showroomAperto: false
+                });
+            });
+        }
+
+        function eseguiScenografiaVittoriaInterattiva(stanza) {
+            const dataVincitore = JSON.parse(stanza.vincitoreFaseFinale);
+            const screenVic = document.getElementById("victory-screen");
+            screenVic.classList.add("active");
+
+            document.getElementById("vincitore-nome-banner").innerText = dataVincitore.nome;
+            document.getElementById("vincitore-testo-carta").innerText = dataVincitore.carta;
+
+            if (stanza.creatore === mioNome) {
+                setTimeout(() => {
+                    const giocatori = Object.keys(stanza.giocatori);
+                    const indexZarAttuale = giocatori.indexOf(stanza.zar);
+                    const prossimoZar = giocatori[(indexZarAttuale + 1) % giocatori.length];
+
+                    database.ref("stanze/" + codiceStanzaCorrente).update({
+                        domandaCorrente: "",
+                        carteGiocate: "",
+                        showroomAperto: false,
+                        vincitoreFaseFinale: "",
+                        zar: prossimoZar
+                    });
+                    indexShowroomCorrente = 0;
+                }, 6000);
+            }
+        }
+    </script>
+</body>
+</html>
